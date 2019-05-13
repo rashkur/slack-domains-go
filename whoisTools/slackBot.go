@@ -229,7 +229,7 @@ func RunSlackAndCron(env *Env,
 
 			case strings.Contains(ev.Text, "help"):
 				helpMessageList := "\ncheckwhois <domain|string> - for checking one site\n" +
-					"fullexpirationlist - for checking all sites in db (may take minutes in you have hundreds of domains)\n" +
+					"fullexpirationlist - for checking all sites in db (may take minutes if you have hundreds of domains)\n" +
 					"adddomain <domain|string>,<account|string>,<checkwhois|bool(0,1)>,<checkssl|bool(0,1)> - adddomain example.com,Robert Paulson 123456,1,1\n" +
 					"deldomain <domain> - deldomain example.com\n" +
 					"checkssl <domain>:<port> - checkssl example.com:443\n" +
