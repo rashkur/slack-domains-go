@@ -5,7 +5,7 @@
 
 ## Why?
 
-I had a big pool of domains on my work (500+) and checking 3-4 godaddy accounts and emails was a headache for me. So i wrote this bot to to automate this routine.
+I've had a big pool of domains on my work (500+) and checking 3-4 godaddy accounts and emails was a boring routine for me. So I'd wrote this bot to to automate it.
 Later I've added ssl checking support with port costumization. 
 
 ## How to use it?
