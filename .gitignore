@@ -1,0 +1,11 @@
+*.swp
+.DS_Store
+.idea
+.travis.yml
+*.db
+.vscode
+runDWBot_linux
+runDWBot_linux_test
+runDWBot
+prod.ini
+src/*
