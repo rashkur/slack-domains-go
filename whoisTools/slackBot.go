@@ -142,18 +142,8 @@ func RunSlackAndCron(env *Env,
 
 	for msg := range rtm.IncomingEvents {
 		switch ev := msg.Data.(type) {
-		case *slack.HelloEvent:
-			//          fmt.Printf("ID: %s, Fullname: %s, Email: %s\n", user.ID, user.Profile.RealName, user.Profile.Email)
-
-		case *slack.ConnectedEvent:
-			//			fmt.Println("Infos:", ev.Info)
-			//			fmt.Println("Connection counter:", ev.ConnectionCount)
-			// Replace C2147483705 with your SlackChannel ID
-			//rtm.SendMessage(rtm.NewOutgoingMessage("Domain whois check bot connected", allowedUsers[0]))
 
 		case *slack.MessageEvent:
-			// Info.Printf("ev.SlackChannel: %s, ev.Msg: %v, ev.Text: %s, ev.SubMessage: %v, ev.Comment:%s ",
-			// ev.Channel, ev.Msg, ev.Text, ev.SubMessage, ev.Comment)
 
 			if !checkPrivileges(ev.User, allowedUsers) {
 				// rtm.SendMessage(rtm.NewOutgoingMessage(
@@ -242,9 +232,6 @@ func RunSlackAndCron(env *Env,
 
 		case *slack.PresenceChangeEvent:
 			fmt.Printf("Presence Change: %v\n", ev)
-
-			//case *slack.LatencyReport:
-			//fmt.Printf("Current latency: %v\n", ev.Value)
 
 		case *slack.RTMError:
 			Info.Printf("Error: %s\n", ev.Error())
