@@ -1,8 +1,6 @@
 package main
 
 import (
-	//"github.com/likexian/whois-parser-go"
-
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,14 +9,9 @@ import (
 
 	"./whoisTools"
 	ini "gopkg.in/ini.v1"
-	// _ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	// first array item - channel for reports printing with cron
-	// bot channel, rashkur, max, medianyk
-	// when to check domains from db
-
 	slackToken   = ""
 	allowedUsers = []string{}
 	crons        = []string{}
