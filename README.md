@@ -1,5 +1,4 @@
-# whois-go
- Slack bot for checking domains and ssl certificates for expiration 
+Slack bot for checking domains and ssl certificates for expiration 
  
 ![Main Window](https://i.imgur.com/1TbqKHo.png)
 
