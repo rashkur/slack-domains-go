@@ -10,18 +10,16 @@ func (env *Env) FEL(slackChannel string, rtm slack.RTM) {
 
 	// Can be optimised - if we dont need to work with domains having "Ok" status - just implement counter in place of okStorage
 	okStorage,
-		expires10Storage,
-		expires30Storage,
-		expires60Storage,
-		expiredStorage,
-		errorStorage := WhoisReplys{},
-		WhoisReplys{},
-		WhoisReplys{},
-		WhoisReplys{},
-		WhoisReplys{},
-		WhoisReplys{}
-
-	// jobCounter := 0
+	expires10Storage,
+	expires30Storage,
+	expires60Storage,
+	expiredStorage,
+	errorStorage := WhoisReplys{},
+	WhoisReplys{},
+	WhoisReplys{},
+	WhoisReplys{},
+	WhoisReplys{},
+	WhoisReplys{}
 
 	// full expiration reports printer
 	(*Env).FullExpirationList(env,
@@ -149,8 +147,6 @@ func (env *Env) FullExpirationList(
 	}
 	// get all records in loop and run check
 	rows, err = env.DB.Query("SELECT * FROM sites WHERE checkwhois=1 OR checkssl=1 ORDER BY RANDOM()")
-	// numOfDomains = 100
-	// rows, err = env.DB.Query("SELECT * FROM sites WHERE checkwhois=1 OR checkssl=1 ORDER BY RANDOM() LIMIT 100")
 	CheckErr(err)
 
 	var id int
@@ -160,8 +156,6 @@ func (env *Env) FullExpirationList(
 	var checkssl int
 	var server string
 
-	// jobUUID := uuid.Must(uuid.NewV4())
-
 	okChan := make(chan ReplyStruct, 100)
 	expires10DaysChan := make(chan ReplyStruct, 100)
 	expires30DaysChan := make(chan ReplyStruct, 100)
@@ -169,7 +163,6 @@ func (env *Env) FullExpirationList(
 	expiredChan := make(chan ReplyStruct, 100)
 	errorChan := make(chan ReplyStruct, 100)
 
-	// printReport := make(chan bool)
 	threadCounter := make(chan bool, 100)
 	jobCounter := 0
 
@@ -200,7 +193,6 @@ func (env *Env) FullExpirationList(
 				jobCounter++
 				if jobCounter == numOfDomains {
 					printReport <- true
-					//exit
 					return
 				}
 			}
@@ -230,7 +222,6 @@ func (env *Env) FullExpirationList(
 		}
 		// We have collected all the jobs, the program can now terminate
 		waitForAllJobs <- true
-		//exit
 		return
 	}()
 
@@ -253,9 +244,6 @@ func (env *Env) FullExpirationList(
 			rs.Domain = domain
 			rs.Server = server
 			rs.SlackUser = ""
-			// rs.SlackChannel = slackChannel
-
-			//Info.Println(rs.Domain)
 
 			if checkwhois == 1 {
 				GetExpirationDateAsync(rs,
