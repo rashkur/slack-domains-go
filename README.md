@@ -9,7 +9,7 @@ Later I've added ssl checking support with port costumization.
 
 ## How to use it?
 
-* Download release or compile in by yourself (linux kernel 3.6+ needed).
+* Download release or compile it by yourself (linux kernel 3.6+ needed).
 * Fill the bot.ini and run it. If you dont know you slack ID just type 'help' into the channel and check the console. You'll have message like ```<@UXXXXXXXX> Sorry, you're not allowed to send commands...```. This is your id. Copy and past it to the config without @ symbol. 
 * Bot will automatically create sqlite database file in the working directory.
 * Send 'help' to your slack channel with bot and start adding domains via slack bot channel. You will see message like ```checkwhois <domain|string> - for checking one site```  
