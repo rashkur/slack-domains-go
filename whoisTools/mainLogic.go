@@ -2,10 +2,17 @@ package whoistools
 
 import (
 	"../whois-parser-go"
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
+	"strings"
+	"time"
+	"errors"
+	"strconv"
 )
 
-func (env *Env) FEL(slackChannel string, rtm slack.RTM) {
+func (env *Env) FEL(slackChannel string, 
+	rtm slack.RTM, 
+	transip_accname string, 
+	transip_apikey string) {
 	printReportsSignal := make(chan bool)
 
 	// Can be optimised - if we dont need to work with domains having "Ok" status - just implement counter in place of okStorage
@@ -29,7 +36,9 @@ func (env *Env) FEL(slackChannel string, rtm slack.RTM) {
 		&expires60Storage,
 		&expiredStorage,
 		&errorStorage,
-		printReportsSignal)
+		printReportsSignal,
+		transip_accname, 
+		transip_apikey)
 
 	PrintReport(rtm,
 		printReportsSignal,
@@ -44,6 +53,7 @@ func (env *Env) FEL(slackChannel string, rtm slack.RTM) {
 
 // GetExpirationDateAsync - self-explanatory name
 func GetExpirationDateAsync(
+	ds DomainStruct,
 	rs ReplyStruct,
 	okChan chan<- ReplyStruct,
 	expires10DaysChan chan<- ReplyStruct,
@@ -51,7 +61,9 @@ func GetExpirationDateAsync(
 	expires60DaysChan chan<- ReplyStruct,
 	expiredChan chan<- ReplyStruct,
 	errorChan chan<- ReplyStruct,
-	threadCounter chan<- bool) {
+	threadCounter chan<- bool,
+	transip_accname string, 
+	transip_apikey string) {
 
 	var ret ReplyStruct
 	ret.ID = rs.ID
@@ -62,13 +74,40 @@ func GetExpirationDateAsync(
 	ret.Server = rs.Server
 
 	// all domains with invalid whois going to error channel
-	result, err := Whois(rs.Domain)
-	if err != nil {
-		ret.Error = err
 
-		errorChan <- ret
-		threadCounter <- true
-		return
+	var transipDomainRenewalDate = time.Now()
+	var result = ""
+	var err = errors.New("")
+
+	if ds.Provider == 0 {
+		result, err = Whois(rs.Domain)
+		if err != nil {
+			ret.Error = err
+
+			errorChan <- ret
+			threadCounter <- true
+			return
+		}
+	}
+
+	if ds.Provider == 1 {
+		transipDomainRenewalDate, err = TransipGetRenewalDate(transip_accname, transip_apikey, rs.Domain)
+		if err != nil {
+			ret.Error = err
+	
+			errorChan <- ret
+			threadCounter <- true
+			return
+		}
+		
+		result, err = TransipGetWhois(transip_accname, transip_apikey, rs.Domain)
+		if err != nil {
+			ret.Error = err
+	
+			errorChan <- ret
+			threadCounter <- true
+			return
+		}
 	}
 
 	whoisParserRet, err := whois_parser.Parse(result)
@@ -85,7 +124,12 @@ func GetExpirationDateAsync(
 	// expiresChan - domains which will be expired soon
 	// expiredChan - domains which already expired
 
-	gdd, isExpiring, expirationTerm, isExpired, err := getDateDiff(whoisParserRet.Registrar.ExpirationDate)
+	gddval := transipDomainRenewalDate.String() //time.now or actual renewal date
+	if ds.Provider != 1 {
+		gddval = whoisParserRet.Registrar.ExpirationDate
+	}
+	
+	gdd, isExpiring, expirationTerm, isExpired, err := getDateDiff(gddval)
 	if err != nil {
 		ret.Error = err
 
@@ -135,7 +179,9 @@ func (env *Env) FullExpirationList(
 	expires60Storage *WhoisReplys,
 	expiredStorage *WhoisReplys,
 	errorStorage *WhoisReplys,
-	printReport chan<- bool) {
+	printReport chan<- bool,
+	transip_accname string, 
+	transip_apikey string) {
 
 	//get total amount of domains
 	rows, err := env.DB.Query("SELECT COUNT(*) FROM sites WHERE checkwhois=1 OR checkssl=1")
@@ -145,16 +191,14 @@ func (env *Env) FullExpirationList(
 		err = rows.Scan(&numOfDomains)
 		CheckErr(err)
 	}
+        rows.Close()
 	// get all records in loop and run check
 	rows, err = env.DB.Query("SELECT * FROM sites WHERE checkwhois=1 OR checkssl=1 ORDER BY RANDOM()")
 	CheckErr(err)
 
-	var id int
-	var account string
-	var domain string
-	var checkwhois int
-	var checkssl int
-	var server string
+
+	// var server string
+       
 
 	okChan := make(chan ReplyStruct, 100)
 	expires10DaysChan := make(chan ReplyStruct, 100)
@@ -234,30 +278,50 @@ func (env *Env) FullExpirationList(
 		// Try to receive from the concurrentGoroutines channel
 		<-concurrentGoroutines
 		go func(idd int) {
+
+			var id int
+			var account string
+			var domain string
+			var checkwhois int
+			var checkssl int
+			var provider int
+			var ssldomain string
+
 			rows.Next()
-			err = rows.Scan(&id, &account, &domain, &checkwhois, &checkssl)
+			err = rows.Scan(&id, &account, &domain, &checkwhois, &checkssl, &provider, &ssldomain)
 			CheckErr(err)
+
+			// Info.Printf("Domain:%s,checkwhois:%d,checkssl:%d \n", domain, checkwhois, checkssl)
 
 			var rs ReplyStruct
 			rs.ID = id
 			rs.Account = account
 			rs.Domain = domain
-			rs.Server = server
 			rs.SlackUser = ""
 
+			var ds DomainStruct
+			ds.Account = account
+			ds.Domain = domain
+			ds.Provider = provider // 0 - whois, 1 - transip api
+			ds.SSLDomain = ssldomain
+
 			if checkwhois == 1 {
-				GetExpirationDateAsync(rs,
+				GetExpirationDateAsync(ds, 
+					rs,
 					okChan,
 					expires10DaysChan,
 					expires30DaysChan,
 					expires60DaysChan,
 					expiredChan,
 					errorChan,
-					threadCounter)
+					threadCounter,
+					transip_accname, 
+					transip_apikey)
 			}
 			if checkssl == 1 {
-
-				go CheckSsl(rs,
+				
+				go CheckSsl(ds,
+					rs,
 					okChan,
 					expires10DaysChan,
 					expires30DaysChan,
@@ -276,17 +340,25 @@ func (env *Env) FullExpirationList(
 	}
 	<-waitForAllJobs
 
+        rows.Close()
 	return
 }
 
-func GetSingleExpirationDate(domainAndInfo ReplyStruct, ReplyChan chan<- ReplyStruct) {
+func GetSingleExpirationDate(domainAndInfo ReplyStruct, 
+	ReplyChan chan<- ReplyStruct, 
+	transip_accname string, 
+	transip_apikey string, 
+	provider string) {
+
 	var ret ReplyStruct
 	ret.Domain = domainAndInfo.Domain
 	ret.SlackUser = domainAndInfo.SlackUser
 	ret.SlackChannel = domainAndInfo.SlackChannel
 	ret.MessageType = 1
 
-	result, err := Whois(ret.Domain)
+	var transipDomainRenewalDate = time.Now()
+
+	prov, err := strconv.Atoi(provider)
 	if err != nil {
 		ret.Error = err
 
@@ -294,7 +366,39 @@ func GetSingleExpirationDate(domainAndInfo ReplyStruct, ReplyChan chan<- ReplySt
 		return
 	}
 
-	res, err := whois_parser.Parse(result)
+	var result = ""
+	
+	if prov == 0 {
+		result, err = Whois(ret.Domain)
+		if err != nil {
+			ret.Error = err
+
+			ReplyChan <- ret
+			return
+		}
+    }
+
+	////
+	if prov == 1 {
+		transipDomainRenewalDate, err = TransipGetRenewalDate(transip_accname, transip_apikey, ret.Domain)
+		if err != nil {
+			ret.Error = err
+	
+			ReplyChan <- ret
+			return
+		}
+		
+		result, err = TransipGetWhois(transip_accname, transip_apikey, ret.Domain)
+		if err != nil {
+			ret.Error = err
+	
+			ReplyChan <- ret
+			return
+		}
+	}
+	////
+
+	whoisParserRet, err := whois_parser.Parse(result)
 	if err != nil {
 		ret.Error = err
 
@@ -302,7 +406,12 @@ func GetSingleExpirationDate(domainAndInfo ReplyStruct, ReplyChan chan<- ReplySt
 		return
 	}
 
-	gdd, isExpiring, expirationTerm, isExpired, err := getDateDiff(res.Registrar.ExpirationDate)
+	gddval := transipDomainRenewalDate.String() //time.now or actual renewal date
+	if prov != 1 {
+		gddval = whoisParserRet.Registrar.ExpirationDate
+	}
+
+	gdd, isExpiring, expirationTerm, isExpired, err := getDateDiff(gddval)
 	if err != nil {
 		ret.Error = err
 
@@ -310,7 +419,7 @@ func GetSingleExpirationDate(domainAndInfo ReplyStruct, ReplyChan chan<- ReplySt
 		return
 	}
 
-	ret.Date = res.Registrar.ExpirationDate
+	ret.Date = whoisParserRet.Registrar.ExpirationDate
 	ret.ExpirationTerm = expirationTerm
 	ret.IsExpiring = isExpiring
 	ret.IsExpired = isExpired
@@ -320,14 +429,24 @@ func GetSingleExpirationDate(domainAndInfo ReplyStruct, ReplyChan chan<- ReplySt
 	return
 }
 
+func filltempbuf(tempbuf []string , Domain string, Checkwhois string, Checkssl string) string {
+    tempbuf = []string{Domain, "check whois:", Checkwhois, "check ssl:", Checkssl}
+    return strings.Join(tempbuf, " ")
+}
+
 // FindDomain - find domain in db and return all corresponding info
 func (env *Env) FindDomain(domainToFind DomainStruct, rpl ReplyStruct, ReplyChan chan<- ReplyStruct) {
 
-	rows, err := env.DB.Query("SELECT id, account, domain FROM sites where domain = $1", domainToFind.Domain)
+	rows, err := env.DB.Query("SELECT id, account, domain, checkwhois, checkssl FROM sites where domain = $1", domainToFind.Domain)
 	CheckErr(err)
 
+        var Checkwhois_temp string;
+        var Checkssl_temp string; 
+        var tempbuf []string;
+
+
 	for rows.Next() {
-		err = rows.Scan(&rpl.ID, &rpl.Account, &rpl.Domain)
+		err = rows.Scan(&rpl.ID, &rpl.Account, &rpl.Domain, &Checkwhois_temp, &Checkssl_temp)
 		if err != nil {
 			rpl.Domain = domainToFind.Domain
 			rpl.Error = err
@@ -337,8 +456,10 @@ func (env *Env) FindDomain(domainToFind DomainStruct, rpl ReplyStruct, ReplyChan
 			return
 		}
 		Info.Println("not err", rpl)
+                rpl.Domain = filltempbuf(tempbuf, domainToFind.Domain, Checkwhois_temp, Checkssl_temp)
 		ReplyChan <- rpl
 	}
+        rows.Close()
 
 	return
 }

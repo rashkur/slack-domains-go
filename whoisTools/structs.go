@@ -15,6 +15,8 @@ type DomainStruct struct {
 	Account    string
 	Checkwhois string
 	Checkssl   string
+    Provider   int
+    SSLDomain  string
 }
 
 type WhoisReplys struct {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"text/tabwriter"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 // if len>cap - use snippet

@@ -7,5 +7,10 @@
 runDWBot_linux
 runDWBot_linux_test
 runDWBot
+slack-domains-go
+dwbot.db
+dwbot.sqlite
 prod.ini
+bot.ini
+transip_key
 src/*

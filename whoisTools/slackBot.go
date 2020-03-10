@@ -8,25 +8,25 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nlopes/slack"
+        "github.com/slack-go/slack"
+	//"github.com/nlopes/slack"
 )
 
 // RunSlackAndCron ...
 func RunSlackAndCron(env *Env,
 	allowedUsers []string,
 	slackToken string,
-	crons []string) {
+	crons []string,
+	debug bool,
+	transip_accname string, 
+	transip_apikey string) {
 
-	api := slack.New(slackToken)
-
-	// broken with last lib update :(
-	// slack.SetLogger(Info)
-	// api.SetDebug(enabledebug)
+	api := slack.New(slackToken, slack.OptionDebug(debug))
 
 	rtm := api.NewRTM()
 	go rtm.ManageConnection()
 
-	go startCron(env.DB, allowedUsers[0], rtm, crons)
+	go startCron(env.DB, allowedUsers[0], rtm, crons, transip_accname, transip_apikey)
 
 	threadCounter := make(chan bool)
 
@@ -156,11 +156,12 @@ func RunSlackAndCron(env *Env,
 			switch {
 			case strings.Contains(ev.Text, "checkwhois"):
 				matches := domainRegex.FindString(ev.Text)
+				ss := strings.Split(ev.Text, ",")
 
 				var rs ReplyStruct
 				rs.Domain, rs.SlackUser, rs.SlackChannel = matches, ev.User, ev.Channel
 
-				go GetSingleExpirationDate(rs, ReplyChan)
+				go GetSingleExpirationDate(rs, ReplyChan, transip_accname, transip_apikey, ss[1])
 
 			case strings.Contains(ev.Text, "checkssl"):
 				matches := domainRegex.FindString(ev.Text)
@@ -171,11 +172,13 @@ func RunSlackAndCron(env *Env,
 				rs.SlackChannel = ev.Channel
 				rs.Account = ""
 
-				go CheckSsl(rs, ReplyChan, ReplyChan, ReplyChan, ReplyChan, ReplyChan, ReplyChan, "")
+				var ds DomainStruct
+
+				go CheckSsl(ds, rs, ReplyChan, ReplyChan, ReplyChan, ReplyChan, ReplyChan, ReplyChan, "")
 
 			case strings.Contains(ev.Text, "fullexpirationlist"):
 				// go FEL(db, allowedUsers[0], *rtm)
-				go (*Env).FEL(env, allowedUsers[0], *rtm)
+				go (*Env).FEL(env, allowedUsers[0], *rtm, transip_accname, transip_apikey)
 
 			case strings.Contains(ev.Text, "adddomain"):
 				matches := domainRegex.FindString(ev.Text)
@@ -218,7 +221,7 @@ func RunSlackAndCron(env *Env,
 				go (*Env).DeleteDomain(env, delDom, rpl, ReplyChan)
 
 			case strings.Contains(ev.Text, "help"):
-				helpMessageList := "\ncheckwhois <domain|string> - for checking one site\n" +
+				helpMessageList := "\ncheckwhois <domain|string>,<provider|0-whois,1-transip>- for checking one site\n" +
 					"fullexpirationlist - for checking all sites in db (may take minutes if you have hundreds of domains)\n" +
 					"adddomain <domain|string>,<account|string>,<checkwhois|bool(0,1)>,<checkssl|bool(0,1)> - adddomain example.com,Robert Paulson 123456,1,1\n" +
 					"deldomain <domain> - deldomain example.com\n" +

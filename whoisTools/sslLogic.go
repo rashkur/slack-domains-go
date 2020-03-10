@@ -28,7 +28,8 @@ type sslCert struct {
 }
 
 // CheckSsl using for validate site's ssl certificate
-func CheckSsl(rs ReplyStruct,
+func CheckSsl(ds DomainStruct,
+	rs ReplyStruct,
 	ReplyChan chan<- ReplyStruct,
 	expires10DaysChan chan<- ReplyStruct,
 	expires30DaysChan chan<- ReplyStruct,
@@ -45,7 +46,7 @@ func CheckSsl(rs ReplyStruct,
 		}
 	}
 
-	ns := checkCert(rs.Domain)
+	ns := checkCert(rs.Domain, ds.SSLDomain)
 
 	var ret ReplyStruct
 	ret.ID = rs.ID
@@ -54,6 +55,9 @@ func CheckSsl(rs ReplyStruct,
 	ret.SlackUser = rs.SlackUser
 	ret.SlackChannel = rs.SlackChannel
 	ret.MessageType = 4
+
+	tempbuf := []string{ret.Domain, "ssl"}
+	ret.Domain = strings.Join(tempbuf, " ")
 
 	if ns.Error != nil {
 		ret.Error = ns.Error
@@ -129,13 +133,17 @@ func splitHostPort(hostport string) (string, string, error) {
 	return host, port, nil
 }
 
-func serverCert(host, port string) ([]*x509.Certificate, string, error) {
+func serverCert(host, port string, SSLDomain string) ([]*x509.Certificate, string, error) {
 	d := &net.Dialer{
 		Timeout: time.Duration(timeoutSeconds) * time.Second,
 	}
-	conn, err := tls.DialWithDialer(d, "tcp", host+":"+port, &tls.Config{
-		InsecureSkipVerify: skipVerify,
-	})
+	
+	tlsconfig := tls.Config{InsecureSkipVerify: skipVerify}
+	if len(SSLDomain) > 1 { 
+        tlsconfig = tls.Config{InsecureSkipVerify: skipVerify, ServerName: SSLDomain}
+	}
+
+	conn, err := tls.DialWithDialer(d, "tcp", host+":"+port, &tlsconfig)
 	if err != nil {
 		return []*x509.Certificate{&x509.Certificate{}}, "", err
 	}
@@ -148,22 +156,21 @@ func serverCert(host, port string) ([]*x509.Certificate, string, error) {
 	return cert, ip, nil
 }
 
-func checkCert(hostport string) *sslCert {
+func checkCert(hostport string, SSLDomain string) *sslCert {
+
 	host, port, err := splitHostPort(hostport)
 	if err != nil {
 		return &sslCert{DomainName: host, Error: err}
 	}
-	certChain, ip, err := serverCert(host, port)
+
+	certChain, ip, err := serverCert(host, port, SSLDomain)
 	if err != nil {
+		// fmt.Printf("serverCert error:%s\n", err)
 		return &sslCert{DomainName: host, Error: err}
 	}
 	cert := certChain[0]
 
-	// var loc *time.Location
-	// loc := time.Local
-	// if UTC {
-	// 	loc = time.UTC
-	// }
+	// fmt.Printf("DomainName:%s\nIP:%s\nCommonName:%s\n", host, ip, cert.Subject.CommonName)
 
 	return &sslCert{
 		DomainName: host,
